@@ -36,6 +36,7 @@
 #   ./run_study.sh -j 4            run 4 cases at a time
 #   ./run_study.sh -g A -g C       run only groups A and C
 #   ./run_study.sh -n              dry run: print the commands only
+#   ./run_study.sh -r              resume: skip cases that already finished
 #   ./run_study.sh -- --log_level=4   pass extra flags through to the solver
 #
 # Each case writes ./output_<case>/ containing the .dat time series and
@@ -47,6 +48,7 @@ BIN="./test_2d_T_pipe_pulsatile_parameter_study"
 MANIFEST="manifest.csv"
 JOBS=1
 DRY=0
+RESUME=0
 SEL_GROUPS=""
 EXTRA_ARGS=""
 
@@ -55,6 +57,7 @@ while [[ $# -gt 0 ]]; do
         -j) JOBS="$2"; shift 2 ;;
         -g) SEL_GROUPS="${SEL_GROUPS}$2 "; shift 2 ;;
         -n) DRY=1; shift ;;
+        -r|--resume) RESUME=1; shift ;;
         --) shift; EXTRA_ARGS="$*"; break ;;
         -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 1 ;;
@@ -193,6 +196,17 @@ run_one() {
         return 0
     fi
 
+    # Resume support. case_params.json is written LAST, after the time loop, so its
+    # presence is a reliable "this case finished" marker - a run killed part way
+    # through (closed laptop, power loss, Ctrl-C) leaves the .dat files but no json,
+    # and is correctly re-run.
+    if [[ "$RESUME" == "1" && -f "output_$name/case_params.json" ]]; then
+        echo "    already complete, skipping"
+        printf '%s,%s,%s,%s,%s\n' "$group" "$name" "ok(cached)" "0" "$args" \
+            >> "$MANIFEST.part"
+        return 0
+    fi
+
     # Each case runs in its own working directory.
     #
     # This is required for -j to work at all. Every SPHinXsys process creates
@@ -227,7 +241,7 @@ run_one() {
         >> "$MANIFEST.part"
 }
 export -f run_one
-export BIN DRY MANIFEST EXTRA_ARGS
+export BIN DRY RESUME MANIFEST EXTRA_ARGS
 
 #----------------------------------------------------------------------
 # Execute.
@@ -255,7 +269,7 @@ fi
 } > "$MANIFEST"
 rm -f "$MANIFEST.part"
 
-n_ok=$(grep -c ',ok,' "$MANIFEST" || true)
+n_ok=$(grep -cE ',ok(\(cached\))?,' "$MANIFEST" || true)
 n_bad=$(grep -c ',FAILED,' "$MANIFEST" || true)
 echo
 echo "wrote $MANIFEST : $n_ok ok, $n_bad failed, of ${#CASES[@]} cases"

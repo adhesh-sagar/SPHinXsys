@@ -41,6 +41,8 @@ target_link_libraries(womersley_channel sphinxsys_2d)
 add_custom_target(${PROJECT_NAME}_tools ALL
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_CURRENT_SOURCE_DIR}/run_study.sh ${EXECUTABLE_OUTPUT_PATH}/run_study.sh
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/RUN_EVERYTHING.sh ${EXECUTABLE_OUTPUT_PATH}/RUN_EVERYTHING.sh
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_CURRENT_SOURCE_DIR}/analysis ${EXECUTABLE_OUTPUT_PATH}/analysis
     COMMENT "Deploying run_study.sh and analysis/ next to the binary")

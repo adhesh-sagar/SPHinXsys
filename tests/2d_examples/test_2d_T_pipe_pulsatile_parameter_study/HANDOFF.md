@@ -8,6 +8,10 @@ work up cold, and (b) the findings can go straight into the report.
 
 Read `README.md` first for how to build and run. This file is the *log*.
 
+**Companion documents:**
+- `RUN_EVERYTHING.sh` — one resumable command that produces every number and figure
+- `REPORT_GUIDE.md` — what to put in the report, figure by figure, with sources
+
 ---
 
 ## 0. One-paragraph summary
@@ -234,6 +238,9 @@ work, not a parameter change.
 
 ## 5. How to continue (for a fresh session)
 
+> **The actionable queue is §6.** This section is the context behind it; §7 covers
+> how to phrase the prompts.
+
 1. **Read** `README.md` (build/run) then this file (state and rationale).
 2. **Run the study:**
    ```bash
@@ -266,7 +273,215 @@ work, not a parameter change.
 
 ---
 
-## 6. Suggested report structure (≈20 pages)
+## 6. TASK BACKLOG — the ordered queue
+
+Numbered, self-contained, dependency-ordered. Quote a number and a fresh session
+knows exactly what to do: *"Read HANDOFF.md, then do tasks T1-T4 from §6."*
+
+Tasks marked **[parallel-safe]** can be done while T2's sweep is running.
+Effort is Claude's working time, not your waiting time.
+
+---
+
+> **T1-T3 are now automated by `RUN_EVERYTHING.sh`** (resumable, one command).
+> The descriptions below remain the reference for what each step is for.
+
+### T1 — Visually verify the stenosis and asymmetric-branch geometry
+**Blocks:** T2 groups D and E · **Effort:** small · **Risk if skipped:** high
+
+Groups D and E have only ever had 3-cycle smoke tests. The stenosis is built by
+polygon subtraction from the fluid body and addition to the wall body; if the
+throat is malformed or the wall is not closed, a full sweep wastes an hour per case.
+
+```bash
+cd <build>/tests/2d_examples/test_2d_T_pipe_pulsatile_parameter_study/bin
+./test_2d_T_pipe_pulsatile_parameter_study --stenosis=0.7 --dp=0.05 --cycles=3 --case=geomchk
+./test_2d_T_pipe_pulsatile_parameter_study --branch_ratio=0.5 --dp=0.05 --cycles=3 --case=geomchk2
+```
+Open `output_geomchk/WallBoundary_*.vtp` and `WaterBody_0000000000.vtp` in ParaView.
+**Done when:** the throat is open, the wall is continuous around it, the throat is
+≥ 6 particles across, and the shortened lower branch still contains its disposer.
+
+---
+
+### T2 — Run the full 21-case study
+**Depends on:** T1 · **Effort:** small to launch, ~2–3 h wall time with `-j 4`
+
+```bash
+./run_study.sh -n            # confirm 21 cases
+./run_study.sh -j 4
+```
+Group A's α = 2 cases are slowest (T = 235 at Re 200, α 2).
+**Done when:** `manifest.csv` shows 21 ok, 0 failed. On failure read
+`log_<case>.txt`; a collapsed `Dt` means the instability of §3.5, not a bad parameter.
+
+---
+
+### T3 — Generate all figures and tables
+**Depends on:** T2 · **Effort:** small
+
+```bash
+python3 analysis/figures.py --root . --out figures
+```
+**Done when:** no `!!` lines; `figures/` and `results/` populated. Then sanity-check
+against §3.3: inlet Q error < 1 % at dp = 0.05, split ≈ 0.5, PI ≈ 2A.
+
+---
+
+### T4 — Add a `SectionMeanPressure` reducer  **[parallel-safe]**
+**Depends on:** nothing · **Effort:** medium · **Value:** high
+
+Fixes the one weak diagnostic in the study. `eps_dp` is 0.3–0.9 because pressure is
+sampled at a *single* centreline point and WCSPH point pressure is noise-dominated.
+A slab-averaged pressure over the same cross-sections used for flow rate would cut
+that noise by ~√N and simultaneously improve the RL fit of §5's open items.
+
+Mirror `SectionFlowRate` in `T_pipe_pulsatile_parameter_study.cpp` (search for
+`class SectionFlowRate`): same slab geometry, reduce `ReduceSum<Vecd>` of
+`[p_i·Vol_i, Vol_i]`, divide in Python exactly as `io_utils.flow_rate` does. Record
+it over the **whole run** (not just the analysis window) so it feeds periodicity.
+Then use it in `periodicity.assess` and `lumped.fit` instead of
+`case.pressure_drop`.
+
+**Done when:** `eps_dp` drops below ~0.05 and `lumped.py`'s r² stays ≥ 0.99.
+
+---
+
+### T5 — Resolve the wall-shear convergence problem  **[parallel-safe]**
+**Depends on:** nothing (re-runs 3 cases) · **Effort:** medium · **Value:** high
+
+§3.3's one unresolved result. WSS is twice-derived and dp = 0.075 sits ~35 % above
+its neighbours. Two things to try, in order:
+
+1. **Kernel-corrected gradient.** Swap
+   `VelocityGradientWithWall<NoKernelCorrection>` for
+   `<LinearGradientCorrection>`, which additionally requires constructing
+   `InteractionWithUpdate<LinearGradientCorrectionMatrixComplex>` and calling it
+   before the gradient each step — see
+   `tests/2d_examples/test_2d_lid_driven_cavity_non_newtonian/lid_driven_cavity.cpp:155,161`.
+2. **Probe offsets.** They are currently 1 dp and 2 dp
+   (`probes::buildWallProbes`). Try 1.5 dp and 2.5 dp so both sit fully inside the
+   kernel support, and compare the extrapolation.
+
+Re-run only the group C series (dp = 0.05 / 0.075 / 0.10) and re-check
+`convergence_gci.csv`.
+**Done when:** `tawss_p95` is monotone and returns a finite order, **or** you have
+evidence it cannot be made monotone — which is itself a reportable result. Do not
+force a number.
+
+---
+
+### T6 — Non-Newtonian (Carreau) blood rheology  **[parallel-safe]** — OPTIONAL
+**Depends on:** nothing · **Effort:** medium · **Value:** extra report section
+
+Only if the report needs more material. `--carreau` is parsed and reserved but does
+nothing. The API exists: `addMaterialProperty<CarreauViscosity>(...)`,
+`SimpleDynamics<fluid_dynamics::ShearRateDependentViscosity>`,
+`NonNewtonianViscousForceWithWall<AngularConservative>` — see
+`lid_driven_cavity.cpp:137,161-163`. Note `AdvectionViscousTimeStep` must then use
+the maximum viscosity.
+**Done when:** a Carreau run at matched Re shows the expected shear-thinning
+reduction in near-wall viscosity vs the Newtonian baseline.
+
+---
+
+### T7 — Bidirectional inlet for genuine flow reversal — OPTIONAL, LARGE
+**Depends on:** nothing · **Effort:** large · **Value:** only if reversal is required
+
+§3.4: A > 1 needs an inlet that accepts backflow. The machinery is in
+`tests/extra_source_and_tests/extra_src/shared/pressure_boundary/` (bidirectional
+buffers, Windkessel BCs) but it is a different framework and lives outside the main
+test tree. **This is a project, not a task.** Do not start it unless the report
+specifically needs flow reversal — the A ≤ 1 sweep already covers the physiological
+range for this geometry.
+
+---
+
+## 7. How to prompt from here
+
+### First: most of what is left is NOT a prompt
+
+The sweep is a terminal command, not a conversation. Do this yourself:
+
+```bash
+cd <build>/tests/2d_examples/test_2d_T_pipe_pulsatile_parameter_study/bin
+nohup ./RUN_EVERYTHING.sh &
+tail -f run_everything.log
+```
+
+Resumable — if the laptop sleeps or you Ctrl-C, run it again and it skips whatever
+finished. Asking a chat session to babysit a 3-hour job wastes the session; use
+Claude for the parts that need judgement.
+
+### The one rule for a fresh chat
+
+A new session has **no memory of this work** and will not find these files on its
+own. Every opening prompt needs: **the path**, **which document**, **which section**.
+
+```
+Read HANDOFF.md and REPORT_GUIDE.md in
+/Users/adheshsagar/CodeFiles/bfm11/sphinxsys/tests/2d_examples/test_2d_T_pipe_pulsatile_parameter_study/
+then <what you want>.
+```
+
+### Prompts by where you are
+
+**A. Sweep finished, want to know what you got**
+
+> Read `HANDOFF.md` §3 and every CSV in `bin/results/`. Compare the actual numbers
+> against the ones quoted in `HANDOFF.md` §3.3 and `REPORT_GUIDE.md` — those came
+> from a partial run. Tell me what changed, what is now better or worse, and
+> whether any case failed. Update §1.3 and §3.3 of `HANDOFF.md` with the real
+> numbers.
+
+**B. Some cases failed**
+
+> `manifest.csv` shows these cases FAILED: <paste>. Read the matching
+> `log_<case>.txt`, diagnose, and fix. Check `HANDOFF.md` §3.5 first — this may be
+> a known failure mode rather than a new one.
+
+**C. Writing a report section**
+
+> Read `REPORT_GUIDE.md` §2. I am writing section <N>. Using the real numbers in
+> `bin/results/*.csv`, draft that section: what the figures show, what the numbers
+> are, and what to conclude. Quote only numbers that are actually in the CSVs -
+> do not carry over any value from the guide without checking it.
+
+That last sentence matters. The numbers in `REPORT_GUIDE.md` are from a partial
+run and *will* be stale.
+
+**D. Stuck on ParaView**
+
+> Read `REPORT_GUIDE.md` §4. I want <the 2x2 phase montage / the stenosis throat
+> render>. Walk me through it for the files actually in `output_<case>/`, and tell
+> me which snapshot numbers to use.
+
+**E. Remaining code work (T4/T5)**
+
+> Read `HANDOFF.md` §6 and do T4. Do not touch anything listed in §4.
+
+For T5, bound it explicitly — it is the one genuine rabbit hole:
+
+> Do T5, but try only the two fixes listed. If neither makes `tawss_p95` monotone,
+> stop and report that, rather than going deeper. A negative result is acceptable
+> here and is already written into the report plan.
+
+### Phrasing that works
+
+- **Name the document and section**, not "the next few things". *"T1-T4 in §6 of
+  HANDOFF.md"* beats *"the next 4 things"*.
+- **Batch by dependency, not by count.** T4 and T5 are independent and marked
+  parallel-safe; T1→T2→T3 is one chain.
+- **Ask for the log to be updated** at the end of any session that changes state,
+  or this document goes stale and the next session inherits a wrong picture.
+- **Bound the rabbit holes** — say what "done" and "give up" both look like.
+- **Say "do not fabricate numbers"** when asking for report text. It is the single
+  most useful sentence once real results exist.
+- **Carry the negative results forward.** §3.1, §3.3 and §3.4 are things a fresh
+  session will otherwise rediscover the hard way — or silently "fix" back into a
+  broken state. §4 lists what must not be touched.
+
+## 8. Suggested report structure (≈20 pages)
 
 | § | Content | Pages |
 |---|---|---|

@@ -1,6 +1,6 @@
 # Handoff / work log — pulsatile T-pipe parameter study
 
-**Date:** 2026-08-18 · **Status:** framework complete and verified; 4 of 21 study runs executed
+**Date:** 2026-09-19 · **Status:** COMPLETE - all 21 study runs executed, 0 failures
 
 This document records what was planned, what was actually executed, what was
 found, and what remains. It is written so that (a) a new chat session can pick the
@@ -58,32 +58,37 @@ Total ≈ 4 850 lines. Everything compiles clean; all four CMake targets build.
 4. **Production resolution changed from dp = 0.15 to dp = 0.05**, forced by the
    Stokes-layer criterion (§2.2).
 
-### 1.3 Runs actually executed
+### 1.3 Runs actually executed - ALL 21, zero failures
 
-| Case | Group | Parameters | Wall time |
-|---|---|---|---|
-| `A_Re100_al5` | A (1/9) | Re 100, α 5, A 0.5, dp 0.05 | 286 s |
-| `C_dp0.075` | C (complete) | Re 100, α 5, A 0.5, dp 0.075 | 107 s |
-| `C_dp0.10` | C (complete) | Re 100, α 5, A 0.5, dp 0.10 | 74 s |
-| `wom_al2` / `wom_al5` / `wom_al10` | benchmark (complete) | α 2 / 5 / 10 | — |
+| Group | Cases | What it gives |
+|---|---|---|
+| A | 9 | Re (50/100/200) x alpha (2/5/10) factorial at A = 0.5, dp = 0.05 |
+| B | 4 | amplitude sweep A = 0, 0.25, 0.75, 1.0 |
+| C | 2 (+A anchor) | resolution series dp = 0.05 / 0.075 / 0.10 |
+| D | 2 | asymmetric branch, b = 0.5 and 0.7 |
+| E | 3 | stenosis, 30 / 50 / 70 % |
+| F | 1 | CFL insensitivity (half time step) |
+| benchmark | 3 | Womersley channel, alpha = 2 / 5 / 10 |
 
-**Group C (convergence) is complete** — its three members are dp = 0.05 (the
-group-A anchor), 0.075 and 0.10.
+Slowest case: `A_Re200_al2` at 22 302 s (its period is T = 236, so one run covers
+~1650 time units). Total sweep ~29 h CPU, run 4-way parallel.
 
-Additionally smoke-tested (3 cycles, dp = 0.10, results discarded): stenosis 0.5
-and 0.7, branch_ratio 0.5, cfl_scale 0.5, and A = 0.25 / 0.75 / 1.0 / 1.5.
+**Auxiliary runs live in `bin/aux/`** - the animation case (`ANIM`), the two
+geometry checks (`GEOM_*`) and the early smoke tests (`S_*`). They were moved out
+of the top level because `load_study` globs `output_*` and they were contaminating
+the analysis: `ANIM` duplicated `C_dp0.10`'s resolution in the convergence series,
+and `ANIM`/`S_cfl`/`C_*` all collided on the (Re 100, alpha 5) cell of the
+factorial. The analysis is now also hardened against this (one case per resolution;
+factorial restricted to the production dp), but keep auxiliary runs in `aux/`.
 
 ### 1.4 Not executed
 
-- **Group A: 8 of 9 cases.** The (Re × α) factorial — the core of the study.
-- **Group B: all 4.** Amplitude sweep.
-- **Group D: both.** Asymmetric branch (code smoke-tested, no production run).
-- **Group E: all 3.** Stenosis (code smoke-tested, no production run).
-- **Group F: 1.** CFL check (smoke-tested).
+Nothing from the study matrix. Optional extras only:
 
-Run them with `./run_study.sh -j 4`. Estimated ~2–3 h wall time with `-j 4`.
-
----
+- **T4** `SectionMeanPressure` reducer - would fix the noisy `eps_dp` diagnostic
+- **T5** wall-shear convergence - still unresolved, see §3.3
+- **T6** Carreau non-Newtonian rheology - `--carreau` reserved but unimplemented
+- **T7** bidirectional inlet for A > 1 - a project, not a task
 
 ## 2. Design decisions worth defending in the report
 
@@ -172,25 +177,91 @@ growing as δ/dp falls independently confirms the ≥ 4 criterion of §2.2.
 Analytical reference values (`womersley.flow_phase_lag_deg`), useful as a
 report table: lag = 5.7° (α=0.5), 57.2° (α=2), 80.7° (α=5), 85.7° (α=10).
 
-### 3.3 Verification results (Re 100, α 5, A 0.5; dp 0.05/0.075/0.10)
+### 3.3 Verification and results — FINAL NUMBERS (full 21-case study)
 
-- **Inlet flow rate** → exact `U·D = 3`: 2.99051, 2.98858, 2.98519. Observed order
-  **2.69**, Richardson extrapolation **2.9915**, **GCI 0.04 %**.
-- **Flow split** 0.4987–0.4997 vs symmetric prediction 0.5.
-- **Mass conservation** `Q₁ = Q₂ + Q₃`: rms closure error 0.78 → 0.69 → 0.53 %.
-- **Pulsatility index** 1.012 vs theoretical `2A` = 1.0.
-- **OSI** ≈ 0.001 steady vs up to 0.22 pulsatile — correctly vanishes with nothing
-  oscillating.
-- **Mach** 0.084–0.087; bulk density deviation 1.28 / 1.05 / 0.80 %.
+**Convergence** (dp 0.05 / 0.075 / 0.10, Celik unequal-ratio):
 
-**Honest negative result:** *wall shear did not converge monotonically.* Both the
-raw peak (0.208 / 0.311 / 0.188) and the 95th percentile (0.181 / 0.242 / 0.170)
-put dp = 0.075 ~35 % above its neighbours, so the anomaly is systematic across the
-whole wall, not one bad probe. WSS here is twice-derived (SPH velocity gradient →
-interpolated to probes at 1 dp and 2 dp → linearly extrapolated to the wall), and
-near-wall WCSPH quantities are known to converge slowly. The analysis reports
-`NaN` rather than a fabricated order. **Report TAWSS/OSI as relative comparisons
-between cases at the production resolution, not as converged absolute values.**
+| Functional | values | order | extrapolated | GCI |
+|---|---|---|---|---|
+| `Q_mean` | 2.99051, 2.98858, 2.98519 | **2.69** | **2.9915** (exact = 3) | **0.04 %** |
+| `tawss_p95` | 0.1813, 0.2422, 0.1703 | NaN | — | — |
+| `flow_split` | 0.49969, 0.49952, 0.49866 | NaN | — | — |
+
+**Periodicity and WCSPH validity** across all 21 cases:
+
+- `eps_Q` 0.0069–0.0145, `eps_KE` 0.0025–0.0062 → 14/21 formally periodic at the
+  1 % criterion, the rest marginally above. Both are an order of magnitude better
+  than `eps_dp` (0.3–0.9), which is why the verdict now uses Q and KE only.
+- Mach ≤ 0.096 everywhere **except the stenosis cases**: `E_st0.5` reaches 0.113
+  and `E_st0.7` reaches 0.131, because the throat accelerates the flow. Those two
+  marginally violate weak compressibility — state it as a limitation.
+- Density deviation < 2 % everywhere except `A_Re50_al10` at 3.11 %, the
+  worst-resolved case in the matrix.
+
+**Conservation, across all 21 cases:**
+
+- inlet flow-rate error **−0.14 % to −0.66 %** against the exact `U·D = 3`
+- rms closure error 0.50–0.79 % (one outlier: `A_Re50_al10` at 6.86 %)
+- flow split 0.4995–0.5006 for every symmetric case
+
+**Pulsatility index tracks theory exactly** — this is a clean validation figure:
+
+| A | 0 | 0.25 | 0.5 | 0.75 | 1.0 |
+|---|---|---|---|---|---|
+| PI measured | 0.020 | 0.507 | 1.012 | 1.516 | 2.021 |
+| PI = 2A | 0 | 0.5 | 1.0 | 1.5 | 2.0 |
+
+**Re × α factorial** (peak TAWSS, dimensional): TAWSS falls with Re
+(0.33 → 0.21 → 0.135 for Re 50 → 100 → 200) and is nearly independent of α.
+Max OSI is ~0 at α = 2 and 5 for Re 50–100, but jumps to 0.34–0.50 at α = 10 and
+at Re = 200 — i.e. **flow reversal near the walls appears at high α and high Re**,
+which is the main physical result of the factorial.
+
+**Still unresolved: wall shear does not converge.** Both the raw peak
+(0.208 / 0.311 / 0.188) and the 95th percentile (0.181 / 0.242 / 0.170) put
+dp = 0.075 ~35 % above its neighbours, so it is systematic across the whole wall,
+not one noisy probe. The analysis reports NaN rather than fabricating an order.
+Report TAWSS/OSI as **relative comparisons between cases at the production
+resolution**, never as converged absolute values.
+
+### 3.3b Extension D: the lumped model fails, and the failure is quantitative
+
+The naive resistance-network prediction `split = b/(1+b)` is **wrong by 15 %**:
+
+| b | measured | naive prediction | R₀/R_branch | re-predicted with R₀ |
+|---|---|---|---|---|
+| 0.50 | 0.4809 | 0.3333 | 5.80 | 0.4797 |
+| 0.70 | 0.4872 | 0.4118 | 4.99 | 0.4880 |
+
+The naive form assumes the only resistance in each path is the fully developed
+Poiseuille resistance `12μL/h³` of that branch. But the branches have
+**L/h = DH/(DL−DL1) = 2** — far too short for Poiseuille flow to dominate — so much
+of the pressure drop happens in the junction and entrance and is *common to both
+paths*. Adding a shared series resistance R₀,
+
+```
+split = (R0 + b R) / (2 R0 + (1 + b) R)
+```
+
+and inverting at each measured split gives **R₀ ≈ 5 R from two independent cases**
+(agreeing to 14 %), and re-predicting with the mean R₀ reproduces both splits to
+~0.2 %. So the junction carries roughly five times the resistance of a branch.
+
+This is a **better report result than the original prediction would have been**:
+it shows when a lumped model applies (L/h ≫ 1) and what to do when it does not.
+Computed by `conservation.series_resistance_fit`.
+
+### 3.3c Extension E: stenosis diverts flow, strongly and monotonically
+
+| stenosis | Q_upper fraction | PI_upper |
+|---|---|---|
+| 0 % | 0.4997 | 1.024 |
+| 30 % | 0.4746 | 1.049 |
+| 50 % | 0.4116 | 1.102 |
+| 70 % | 0.2706 | 1.214 |
+
+A 70 % occlusion pushes the upper branch from half the flow down to 27 %, and the
+flow that still gets through is *more* pulsatile (PI rises 1.02 → 1.21).
 
 ### 3.4 A > 1 is not supported — flow reversal needs a bidirectional inlet
 

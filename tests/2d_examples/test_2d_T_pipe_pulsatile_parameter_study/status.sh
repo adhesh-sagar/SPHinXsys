@@ -14,14 +14,23 @@ WATCH=0
 [[ "${1:-}" == "-w" ]] && WATCH=1
 
 show() {
-    local running done_n
+    local running n_study n_bench n_aux
     running=$(pgrep -f "test_2d_T_pipe_pulsatile_parameter_study --" 2>/dev/null | wc -l | tr -d ' ')
     running=$(( running + $(pgrep -f "womersley_channel --" 2>/dev/null | wc -l | tr -d ' ') ))
-    done_n=$(ls -d output_*/ 2>/dev/null | wc -l | tr -d ' ')
+
+    # Count the three kinds separately. Lumping them into one "completed cases"
+    # number is misleading: the study matrix is 21 cases, but the folder count also
+    # includes the 3 Womersley benchmark runs and any auxiliary runs.
+    n_bench=$(ls -d output_wom_*/ 2>/dev/null | wc -l | tr -d ' ')
+    n_study=$(( $(ls -d output_*/ 2>/dev/null | wc -l | tr -d ' ') - n_bench ))
+    n_aux=$(ls -d aux/*/ 2>/dev/null | wc -l | tr -d ' ')
 
     echo "======================================================================"
     date "+  %H:%M:%S"
-    echo "  completed cases: $done_n        processes computing: $running"
+    echo "  study cases (A-F):  $n_study of 21"
+    echo "  Womersley benchmark: $n_bench of 3"
+    echo "  auxiliary (aux/):    $n_aux   [not part of the study]"
+    echo "  processes computing: $running"
     echo "======================================================================"
 
     if [[ "$running" == "0" ]]; then

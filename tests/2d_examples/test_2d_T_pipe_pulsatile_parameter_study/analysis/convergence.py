@@ -196,6 +196,16 @@ def study(cases: dict[str, Case], series: list[str] | None = None):
             if len(dps) > len(best):
                 best, best_key = names, key
         series = best
+        # One case per resolution. Auxiliary runs (an animation case, a smoke test)
+        # can share a dp with a real member of the series; two entries at the same
+        # spacing make the refinement ratio 1.0 and the extracted order meaningless.
+        # Keep the better-converged case at each dp.
+        by_dp: dict[float, str] = {}
+        for n in series:
+            dp = cases[n]["dp"]
+            if dp not in by_dp or cases[n]["n_cycles"] > cases[by_dp[dp]]["n_cycles"]:
+                by_dp[dp] = n
+        series = list(by_dp.values())
         if len(series) < 3:
             print("  convergence: fewer than 3 resolutions found, skipping")
             return {

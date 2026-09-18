@@ -7,9 +7,9 @@ Every figure below is produced automatically by
 except the ParaView screenshots, which are flagged **[ParaView]** and which you
 make by hand — instructions in §4.
 
-Numbers to quote are in `results/*.csv`. **Quote from the CSV, never from this
-document** — the values here are from a partial run and will change once the full
-sweep finishes.
+Numbers to quote are in `results/*.csv`. **The full 21-case study is complete
+(zero failures), so those CSVs are final.** `HANDOFF.md` §3.3 carries the headline
+numbers; quote from the CSVs for anything not listed there.
 
 ---
 
@@ -150,7 +150,13 @@ validation.
 
 **F10 — `results/factorial_peak_tawss.pdf`** — Re × α heat map of peak TAWSS
 **F11 — `results/factorial_max_osi.pdf`** — Re × α heat map of max OSI
-*These only appear once group A's 9 cases exist.*
+
+*Say:* TAWSS is controlled by Re (0.33 → 0.21 → 0.135 as Re goes 50 → 100 → 200)
+and is almost independent of α. OSI is the opposite: ~0 at α = 2–5 for Re ≤ 100,
+but 0.34–0.50 at α = 10 and across all of Re = 200. **That contrast is the main
+physical result of the factorial** — near-wall flow reversal switches on at high
+Womersley number and high Reynolds number, and OSI is the index that detects it
+while TAWSS is blind to it. Normalise TAWSS by μU/R so the Re trend collapses.
 
 **F12 — `results/wall_tawss_map.pdf`**
 Wall probes coloured by TAWSS on the real geometry. The clearest single hemodynamics
@@ -182,13 +188,28 @@ back to the lumped models from the lectures.
 
 **F15 — `validation/flow_split_vs_branch_ratio.pdf`**
 Measured split vs the analytic resistance-network prediction `b/(1+b)`.
-*Say:* two branches in parallel divide flow inversely to their resistances
-`R_h = 12μL/h³`; with only the length varied this collapses to `Q_up/Q_lo = b`. A
-quantitative validation against a lumped-parameter model.
+
+*Say:* the naive prediction is **wrong by 15 %** (measured 0.481 vs predicted 0.333
+at b = 0.5), and explain why — the branches have L/h = 2, far too short for
+Poiseuille resistance to dominate, so the junction and entrance contribute a large
+resistance *common to both paths*. Adding a shared series resistance R₀ and
+inverting gives **R₀ ≈ 5 R_branch from two independent cases** (5.80 and 4.99), and
+re-predicting reproduces both splits to ~0.2 %. See `HANDOFF.md` §3.3b.
+
+This is a stronger result than the prediction simply working: it establishes *when*
+a lumped model applies (L/h ≫ 1) and how to correct it when it does not. Worth a
+full paragraph, and it connects directly to the lumped-parameter lectures.
 
 **F16 — stenosis series** — `extensions/stenosis_peak_wss.pdf` plus a **[ParaView]**
-velocity-magnitude render of the throat jet at 50 % or 70 % occlusion.
-*Say:* peak WSS vs area reduction; locate the jet and any recirculation downstream.
+velocity-magnitude render of the throat jet at 70 % occlusion (use
+`aux/output_GEOM_stenosis0.7/`).
+
+*Say:* occlusion diverts flow away from the blocked branch — the upper branch
+carries 0.500 → 0.475 → 0.412 → **0.271** of the total at 0 / 30 / 50 / 70 %
+occlusion — while the flow that does get through becomes *more* pulsatile
+(PI 1.02 → 1.21). Note also that the throat jet pushes the Mach number to 0.113 and
+0.131 in the 50 % and 70 % cases, marginally above the 0.1 weak-compressibility
+guideline: a limitation to state, not to hide.
 
 **T6** — from `results/stenosis_series.csv`.
 
@@ -216,7 +237,9 @@ Markers reward knowing the limits of your own method. Each of these is a real fi
    fabricating an order.
 3. **A > 1 is unsupported** (§9) — at A = 1.5 the inlet velocity reverses but the
    emitter/buffer is unidirectional; the run collapses to Dt ≈ 3 × 10⁻⁵. Bounded
-   experimentally: A = 0.25 / 0.75 / 1.0 all run cleanly.
+   experimentally: A = 0.25 / 0.75 / 1.0 all run cleanly, and the PI sweep
+   (0.020 / 0.507 / 1.012 / 1.516 / 2.021 against PI = 2A) is exact across that
+   supported range.
 
 Two more worth a sentence each in §3 or §5, as evidence of careful numerics:
 - The continuity step had to be switched to the **Riemann** variant; with the

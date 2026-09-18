@@ -491,8 +491,28 @@ def fig_parameter_maps(cases, out: Path, res: Path):
     lrows = lumped.table(cases)
     _csv(lrows, res, "lumped_RL_fit")
 
+    # The factorial must contain exactly one case per (Re, alpha) cell, all at the
+    # SAME resolution and the same time step. Convergence-series members, CFL
+    # checks and any auxiliary runs otherwise collide on the centre cell and
+    # silently overwrite the production result.
     fac = [r for r in wrows if r["A"] == 0.5 and r["branch_ratio"] == 1.0
-           and r["stenosis"] == 0]
+           and r["stenosis"] == 0 and r.get("cfl_scale", 1.0) == 1.0]
+    if fac:
+        # the production resolution is the one covering the most (Re, alpha) cells
+        from collections import Counter
+        cells = Counter()
+        for r in fac:
+            cells[r["dp"]] += 1
+        dp_prod = max(cells, key=lambda d: (cells[d], -d))
+        dropped = [r["case"] for r in fac if r["dp"] != dp_prod]
+        fac = [r for r in fac if r["dp"] == dp_prod]
+        if dropped:
+            print(f"    factorial at dp={dp_prod:g}; excluded other resolutions: "
+                  + ", ".join(sorted(dropped)))
+        seen = {}
+        for r in fac:
+            seen[(r["Re"], r["alpha"])] = r   # deterministic: last wins, but all equal now
+        fac = list(seen.values())
     if fac:
         Re_vals = sorted({r["Re"] for r in fac})
         al_vals = sorted({r["alpha"] for r in fac})

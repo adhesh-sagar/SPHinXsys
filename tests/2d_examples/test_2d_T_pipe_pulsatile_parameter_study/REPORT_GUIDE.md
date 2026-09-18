@@ -231,58 +231,86 @@ Two more worth a sentence each in §3 or §5, as evidence of careful numerics:
 
 Four screenshots (F1, F2, F12-companion, F16), plus the phase montage below.
 
-### Open the `.pvd`, not the `.vtp`
+### First: the case must have been run with `--vtp_all=1`
+
+By default VTPs are written only inside the analysis window, which is fine for
+figures but makes a broken-looking animation — the series jumps from the t = 0
+at-rest frame straight to fully developed flow. For anything you intend to animate
+or screenshot, run a dedicated case with `--vtp_all=1` (see `HANDOFF.md` §4b).
+`output_ANIM/` is already prepared this way: 142 continuous snapshots.
+
+### Open the grouped `.vtp` series
 
 SPHinXsys writes **one VTP per snapshot**, named by physical time padded to ten
-digits — `WaterBody_0226205018.vtp` is t = 226.205018. That is the same convention
-as the `test_2d_dambreak` benchmark, so it is a normal file *series*, not a single
-file. ParaView will group them on its own, but it has no idea what the numbers mean,
-so the animation ends up indexed 0, 1, 2, …
+digits — `WaterBody_0113107344.vtp` is t = 113.107. Same convention as the
+`test_2d_dambreak` and `test_2d_T_shaped_pipe` benchmarks.
 
-`python3 analysis/make_pvd.py` (run automatically by `RUN_EVERYTHING.sh`) writes two
-collection files per body:
+In ParaView's file dialog these collapse into one entry displayed as
 
-| File | Time slider shows |
-|---|---|
-| `WaterBody.pvd` | physical time |
-| `WaterBody_phase.pvd` | **cycles since the pulsation started** |
+```
+WaterBody_0000000000.vtp*          <- the asterisk means "file series"
+```
 
-**Open the `.pvd`.** For this study `WaterBody_phase.pvd` is almost always the one
-you want, because every figure in the report is labelled by cycle phase. For the
-baseline case the slider runs 10.00 → 13.00, i.e. the three analysis cycles; the
-fractional part *is* the phase.
+**Select that grouped entry** (not an individual file) and Apply — you get the whole
+animation. Load `WallBoundary_0000000000.vtp` alongside it; the wall is static, so it
+is genuinely a single file.
+
+> Expanding the group and picking `WaterBody_0000000000.vtp` on its own gives the
+> t = 0 frame, where the fluid is at rest and nothing appears to move. That is the
+> most common way to conclude the simulation failed when it did not.
+
+The one cost is that the time slider shows a bare frame **index**. To find the frames
+you want:
+
+```bash
+python3 analysis/frames.py output_ANIM --quarters   # the four montage frames
+python3 analysis/frames.py output_ANIM              # full index -> time -> phase table
+```
+
+`frames.py` also reports whether the snapshot series is continuous — a large max gap
+means the case was run without `--vtp_all=1` and will animate badly.
+
+(A `.pvd` collection would label the slider with real time, and `analysis/make_pvd.py`
+can still write one, but ParaView did not read them reliably here. The grouped series
+is the supported path.)
 
 ### Render settings
 
-1. **Open** `WaterBody_phase.pvd` **and** `WallBoundary_0000000000.vtp` together
-   (the wall is static, so it has only one file), then **Apply**.
-2. **Representation:** `Points`; raise **Point Size** to ~4–6 so the particles read
-   as a filled body rather than a dot cloud.
+1. **Open** the grouped `WaterBody_0000000000.vtp*` **and**
+   `WallBoundary_0000000000.vtp`, then **Apply**.
+2. **Representation:** `Points`; raise **Point Size** to ~4–6 so the particles read as
+   a filled body rather than a dot cloud.
 3. **Colour by:** `Velocity` (Magnitude) for flow figures, `Pressure` for pressure
-   figures, `Indicator` for the discretisation figure (F2).
+   figures, `Indicator` for the discretisation figure (F2). Also available:
+   `Density`, `VelocityGradient`.
 4. **Rescale the colour bar to a FIXED range** across any snapshots you intend to
-   compare — otherwise each frame rescales itself and the comparison is meaningless.
-   Use *Rescale to Custom Data Range*, not *Rescale to Data Range*.
+   compare — use *Rescale to Custom Data Range*, not *Rescale to Data Range*.
+   Otherwise every frame rescales itself, the flow looks identical at every phase,
+   and the comparison is meaningless.
 5. **Camera:** View ▸ Camera ▸ `-Z` for a straight-on 2D view. Turn off the
    orientation axes and the ParaView logo for a clean figure.
-6. **Save:** File ▸ Save Screenshot, PNG, at least 1600 × 1200 so it survives being
-   scaled into the report.
+6. **Save:** File ▸ Save Screenshot, PNG, at least 1600 × 1200.
 
 ### The phase montage — the most convincing figure in the report
 
-With `WaterBody_phase.pvd` open, type these four values straight into the **Time**
-box (they are the last full cycle of the baseline case):
+Use a case run with `--vtp_all=1`; `output_ANIM/` is already prepared. Ask
+`frames.py` for the four frames of the last full cycle:
 
-| Panel | Time value | Phase |
-|---|---|---|
-| 1 | `12.00` | 0.00 T |
-| 2 | `12.25` | 0.25 T |
-| 3 | `12.50` | 0.50 T |
-| 4 | `12.75` | 0.75 T |
+```
+$ python3 analysis/frames.py output_ANIM --quarters
+   panel   frame   time        phase
+       1     121     113.107     4.001
+       2     126     117.812     4.250
+       3     131     122.533     4.501
+       4     136     127.243     4.750
+```
 
-Colour all four by velocity magnitude on the **same fixed range**, save each, and
-lay them out 2 × 2 labelled by phase. That one figure shows the pulsatile cycle
-better than any line plot.
+Type each **frame** number into ParaView's Time box, colour by velocity magnitude on
+the same fixed range, save each, and lay them out 2 × 2 labelled by phase
+(0.00 T, 0.25 T, 0.50 T, 0.75 T). That single figure shows the pulsatile cycle better
+than any line plot.
+
+---
 
 ## 5. Practical notes
 

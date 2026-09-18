@@ -236,6 +236,102 @@ work, not a parameter change.
 
 ---
 
+## 4b. OUTPUT CONVENTION — follow this for every case, always
+
+Benchmarked against the two stock SPHinXsys cases that animate correctly in
+ParaView: `build/tests/2d_examples/test_2d_dambreak/bin/output/` and
+`test_2d_T_shaped_pipe/bin/output/`. Any new case in this project must produce the
+same file set, for the same reasons.
+
+### The canonical structure
+
+```
+output[_<case>]/
+    ShapeSPHSystemDomain.vtp        domain bounding shape, written once
+    WallBoundary_0000000000.vtp     static body -> exactly ONE file
+    WaterBody_0000000000.vtp        \
+    WaterBody_0000536250.vtp         |  the time series: one VTP per snapshot,
+    WaterBody_0001072500.vtp         |  named by physical time x 1e6, zero-padded
+    ...                             /   to 10 digits
+    WaterBody_<Quantity>.dat        reduced scalar histories
+    <Observer>_<Quantity>.dat       observer time series
+```
+
+**Rules, each with the failure it prevents:**
+
+1. **One VTP per snapshot, named `<Body>_<t x 1e6 padded to 10>.vtp`.** This is what
+   `BodyStatesRecording::writeToFile()` (no argument) does. Do not pass an iteration
+   number — the `writeToFile(size_t)` overload names files `ite_*` instead, which
+   breaks the time series. `test_2d_T_shaped_pipe` writes 197 files spanning
+   t = 0 → 100.06 this way.
+
+2. **A static body gets exactly one file.** `WallBoundary_0000000000.vtp` is written
+   once. Do not re-emit it per snapshot.
+
+3. **Snapshots must be CONTINUOUS from t = 0.** This is the rule most easily broken
+   here. Writing VTPs only inside the analysis window produces a series that jumps
+   from the t = 0 at-rest frame straight to a fully developed flow — ParaView shows
+   two disconnected states and the animation looks broken. The study defaults to
+   window-only to keep 21 cases' disk use sane, so **any case you intend to animate
+   or screenshot must be run with `--vtp_all=1`**, which restores continuous
+   coverage (142 snapshots, max gap 0.97, for a 5-cycle case).
+
+4. **Emit `ShapeSPHSystemDomain.vtp`.** The `SPHSystem` constructor writes it into
+   the default `./output`, so any case that calls `resetOutputFolder()` destroys it
+   and must call `sph_system.writeSystemDomainShapeToVtp()` afterwards.
+
+5. **Open the grouped `.vtp` series in ParaView — not a `.pvd`.** In the file
+   dialog the snapshots collapse into a single entry shown as
+   `WaterBody_0000000000.vtp*`; selecting that loads the whole series. This is how
+   the stock benchmarks are used and it is the supported path here.
+
+   `analysis/make_pvd.py` exists and can write `.pvd` collections that would label
+   the time slider with physical time or cycle phase, but **ParaView did not read
+   them reliably in practice**, so it is no longer run by `RUN_EVERYTHING.sh` and
+   nothing depends on it. The grouped series works; leave it at that.
+
+   The cost of the grouped series is that the slider shows a bare frame INDEX.
+   `analysis/frames.py` prints the index -> time -> phase mapping:
+
+   ```bash
+   python3 analysis/frames.py output_ANIM --quarters   # the four montage frames
+   python3 analysis/frames.py output_ANIM              # full table
+   ```
+   It also reports whether the series is continuous, which is the check in rule 3.
+
+6. **Per-case output folders** (`output_<case>/`) are a deliberate deviation from
+   the stock single `output/`, because a 21-case sweep needs isolation. The file set
+   *inside* each folder is identical to the stock convention.
+
+### Making an animation case
+
+```bash
+./test_2d_T_pipe_pulsatile_parameter_study \
+    --Re=100 --alpha=5 --A=0.5 --dp=0.10 --cycles=5 --vtp_all=1 --case=ANIM
+python3 analysis/make_pvd.py output_ANIM
+```
+Then open `output_ANIM/WaterBody_phase.pvd` in ParaView.
+
+### Checking a case conforms
+
+```bash
+ls output_<case>/ | sed 's/_[0-9]\{10\}\.vtp/_<time>.vtp/' | sort -u
+```
+Expect `ShapeSPHSystemDomain.vtp`, one `WallBoundary_<time>.vtp`, one
+`WaterBody_<time>.vtp`, plus `.pvd` and `.dat` files. Then confirm continuity:
+
+```bash
+python3 -c "
+import glob; f=sorted(glob.glob('output_<case>/WaterBody_*.vtp'))
+t=[int(x[-14:-4])/1e6 for x in f]
+print(len(f),'snapshots, t =',t[0],'->',t[-1],'max gap',max(b-a for a,b in zip(t,t[1:])))"
+```
+A max gap comparable to the mean spacing means the series is continuous. A gap of
+hundreds of time units means VTPs were confined to the analysis window — re-run
+with `--vtp_all=1`.
+
+---
+
 ## 5. How to continue (for a fresh session)
 
 > **The actionable queue is §6.** This section is the context behind it; §7 covers

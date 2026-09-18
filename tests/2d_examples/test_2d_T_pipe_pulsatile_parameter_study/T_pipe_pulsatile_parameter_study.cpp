@@ -583,6 +583,11 @@ int main(int ac, char *av[])
         Vec2d(p.DL + p.BW, 2.0 * p.DH + p.BW));
     SPHSystem sph_system(system_domain_bounds, p.dp);
     IO::getEnvironment().resetOutputFolder("./output_" + p.case_name);
+    // The SPHSystem constructor writes the domain-shape VTP into the DEFAULT
+    // ./output folder, which resetOutputFolder then deletes. Re-emit it so each
+    // case folder has the same file set as the stock SPHinXsys benchmarks
+    // (test_2d_dambreak, test_2d_T_shaped_pipe), which ParaView users expect.
+    sph_system.writeSystemDomainShapeToVtp();
     sph_system.handleCommandlineOptions(int(filtered_argv.size()), filtered_argv.data());
 
     //----------------------------------------------------------------------
@@ -781,7 +786,12 @@ int main(int ac, char *av[])
     Real next_sample = 0.0;   // centreline + flow rate, whole run
     Real next_ke = 0.0;       // global diagnostics, whole run
     Real next_window = p.analysis_start; // profiles + wall probes, analysis window
-    Real next_vtp = p.analysis_start;    // VTP snapshots, analysis window
+    // VTP snapshots. By default these are confined to the analysis window, which
+    // keeps the 21-case sweep's disk use sane. That is fine for figures but makes a
+    // poor ANIMATION: the series then jumps straight from the t = 0 at-rest frame to
+    // a fully developed flow, with nothing in between. --vtp_all=1 writes them over
+    // the whole run instead, matching how the stock benchmarks behave.
+    Real next_vtp = p.vtp_all ? 0.0 : p.analysis_start;
     const Real window_interval = p.T / 50.0;
     Real dt = 0.0;
 
@@ -869,7 +879,8 @@ int main(int ac, char *av[])
         // The velocity gradient is a post-processing quantity here, so it only has to
         // be current when the wall probes are about to be sampled.
         const bool in_window = physical_time >= p.analysis_start;
-        if (in_window && physical_time >= next_window)
+        if ((in_window && physical_time >= next_window) ||
+            (p.vtp_all && physical_time >= next_vtp))
         {
             distance_to_wall.exec();
             update_velocity_gradient.exec();
@@ -901,7 +912,7 @@ int main(int ac, char *av[])
                 next_window += window_interval;
         }
 
-        if (in_window && physical_time >= next_vtp)
+        if ((in_window || p.vtp_all) && physical_time >= next_vtp)
         {
             write_body_states.writeToFile();
             while (next_vtp <= physical_time)

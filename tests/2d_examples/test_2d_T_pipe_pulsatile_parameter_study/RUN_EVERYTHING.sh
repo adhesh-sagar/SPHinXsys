@@ -5,7 +5,7 @@
 #   1. geometry check runs for the two extensions (writes VTPs for you to eyeball)
 #   2. the Womersley validation benchmark, alpha = 2 / 5 / 10
 #   3. the full 21-case parameter sweep
-#   4. all figures, result tables and ParaView .pvd collections
+#   4. all figures and result tables
 #
 # It is RESUMABLE and safe to re-run: anything already finished is skipped, so if
 # the laptop sleeps or you Ctrl-C, just start it again and it picks up where it
@@ -101,13 +101,10 @@ say "STEP 3/4  Full 21-case parameter sweep (this is the long one)"
 ./run_study.sh -r -j "$JOBS" || echo "  (some cases failed - see manifest.csv and log_<case>.txt)"
 
 #----------------------------------------------------------------------
-say "STEP 4/4  Figures, result tables and ParaView collections"
+say "STEP 4/4  Figures and result tables"
 #----------------------------------------------------------------------
 python3 analysis/figures.py --root . --out figures
 
-# ParaView .pvd collections: without these the animation is indexed by frame
-# number rather than by physical time or cycle phase.
-python3 analysis/make_pvd.py
 
 END=$(date +%s)
 say "DONE in $(( (END-START)/60 )) min"

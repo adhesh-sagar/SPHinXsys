@@ -52,7 +52,7 @@ inline bool isOurOption(const std::string &key)
     static const std::vector<std::string> ours{
         "Re", "alpha", "A", "dp", "cycles", "case", "branch_ratio",
         "stenosis", "cfl_scale", "c_f", "carreau", "samples_per_cycle",
-        "vtp_per_cycle", "analysis_cycles", "help_case"};
+        "vtp_per_cycle", "analysis_cycles", "vtp_all", "help_case"};
     for (const auto &o : ours)
         if (key == o)
             return true;
@@ -79,6 +79,11 @@ struct CaseParams
     bool carreau{false};      /**< Reserved: shear-thinning blood rheology. */
     int samples_per_cycle{200};
     int vtp_per_cycle{20};
+    bool vtp_all{false};      /**< Write VTP snapshots over the WHOLE run, not just
+                               *   the analysis window. Off by default because the
+                               *   21-case sweep would otherwise produce ~10x the
+                               *   VTP data; turn it on for the one or two cases you
+                               *   intend to animate or screenshot. */
     std::string case_name{"default"};
 
     /** Allowance for flow acceleration around the junction corners, used when
@@ -306,6 +311,8 @@ struct CaseParams
         f << "  \"integer_layers\": "
           << (std::abs(DH / dp - std::round(DH / dp)) < 1e-6 ? "true" : "false") << ",\n";
         f << "  \"samples_per_cycle\": " << samples_per_cycle << ",\n";
+        f << "  \"vtp_per_cycle\": " << vtp_per_cycle << ",\n";
+        f << "  \"vtp_all\": " << (vtp_all ? "true" : "false") << ",\n";
         f << "  \"sample_interval\": " << sample_interval << ",\n";
         f << "  \"periodicity_ok\": " << (periodicity_ok ? "true" : "false") << ",\n";
         f << "  \"n_fluid_particles\": " << n_fluid_particles << ",\n";
@@ -334,7 +341,9 @@ inline void printCaseUsage()
   --cfl_scale=<Real>         multiplies the acoustic time step       [1.0]
   --c_f=<Real>               pin the sound speed (regression only)   [auto]
   --samples_per_cycle=<int>  observer samples per cycle              [200]
-  --vtp_per_cycle=<int>      VTP snapshots per cycle (last window)   [20]
+  --vtp_per_cycle=<int>      VTP snapshots per cycle                 [20]
+  --vtp_all=<0|1>            VTP over the whole run, not just the
+                             analysis window - use for ParaView       [0]
   --carreau=<0|1>            shear-thinning blood rheology           [0]
   --case=<name>              output goes to ./output_<name>          [default]
   --help_case                print this and exit
@@ -436,6 +445,8 @@ inline void parseCaseOptions(int ac, char *av[], CaseParams &params,
                 params.vtp_per_cycle = as_int(value);
             else if (key == "carreau")
                 params.carreau = as_bool(value);
+            else if (key == "vtp_all")
+                params.vtp_all = as_bool(value);
             else if (key == "case")
                 params.case_name = value;
         }

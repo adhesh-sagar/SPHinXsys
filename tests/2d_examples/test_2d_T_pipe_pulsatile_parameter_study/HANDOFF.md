@@ -1,6 +1,8 @@
 # Handoff / work log — pulsatile T-pipe parameter study
 
-**Date:** 2026-09-19 · **Status:** COMPLETE - all 21 study runs executed, 0 failures
+**Last updated:** 2026-09-26 · **Status:** ALL SIMULATION AND AUTOMATED ANALYSIS
+COMPLETE (31 runs, 0 failures). **Report not started.** Next step: ParaView
+screenshots (§4c), then writing. See §0b for the to-do list.
 
 This document records what was planned, what was actually executed, what was
 found, and what remains. It is written so that (a) a new chat session can pick the
@@ -20,9 +22,46 @@ Your original single-case file was extended into a scriptable, dimensionless
 parameter study plus a separate analytical benchmark. **Your original file was not
 modified.** The C++ solver, the sweep driver, and a 10-module Python analysis
 package are complete and working end to end. The physics has been validated
-against the analytical Womersley solution to 1–3 %. Four of the twenty-one study
-runs have been executed (enough to verify every code path and to produce a
-complete convergence study); the remaining seventeen are compute time, not work.
+against the analytical Womersley solution to 1–3 %. All 21 study runs, the 3
+Womersley benchmark runs and 7 auxiliary runs (31 in total) have been executed
+with zero failures, and `RUN_EVERYTHING.sh` has generated every automated figure
+and results table.
+
+---
+
+## 0b. Current state and what remains (2026-09-26)
+
+### Runs on disk — 31, all OK
+
+All under `build/tests/2d_examples/test_2d_T_pipe_pulsatile_parameter_study/bin/`:
+
+| Where | Runs | Count |
+|---|---|---|
+| `output_<case>/` | study groups A–F (`manifest.csv`: 21 ok, 0 failed) | 21 |
+| `output_wom_al{2,5,10}/` | Womersley channel benchmark | 3 |
+| `aux/output_*` | `ANIM`, `GEOM_branch0.5`, `GEOM_stenosis0.7`, `S_br0.5`, `S_cfl`, `S_sten0.5`, `S_sten0.7` | 7 |
+
+### Automated outputs — done
+
+- `figures/` — 21 figures (PNG + PDF) under `verification/`, `validation/`,
+  `results/`, `extensions/`. `run_everything.log` has no `!!` lines.
+- `results/` — 8 CSVs: `convergence_gci`, `lumped_RL_fit`,
+  `mass_conservation_and_split`, `periodicity_and_wcsph_checks`, `stenosis_series`,
+  `tpipe_profile_relaxation`, `wall_metrics`, `womersley_channel_validation`.
+
+### Remaining work — in order
+
+| # | Task | Output | How |
+|---|---|---|---|
+| R1 | **ParaView screenshots** | 5 figures (§4c) | by hand, §4c; or script with `pvbatch` |
+| R2 | **F3 analytical Womersley profiles** | 1 figure | small Python script using `analysis/womersley.py` (not generated yet) |
+| R3 | **Tables T1–T6** | 6 tables | copy from `results/*.csv` (REPORT_GUIDE §2) |
+| R4 | **Write the report** | ~20 pages | REPORT_GUIDE §1–§3; section plan in §8 below |
+| R5 | *Optional:* T4 (`SectionMeanPressure`), T5 (WSS convergence) | — | §6; not needed to write the report |
+
+**R1 order:** stenosis (F16) → phase montage → geometry (F1) → particle close-up (F2)
+→ near-wall reversal. Stenosis first because it is the figure most dependent on
+getting the frame and colour range right.
 
 ---
 
@@ -379,9 +418,9 @@ output[_<case>]/
 ```bash
 ./test_2d_T_pipe_pulsatile_parameter_study \
     --Re=100 --alpha=5 --A=0.5 --dp=0.10 --cycles=5 --vtp_all=1 --case=ANIM
-python3 analysis/make_pvd.py output_ANIM
 ```
-Then open `output_ANIM/WaterBody_phase.pvd` in ParaView.
+Then open the grouped `WaterBody_..vtp*` series in ParaView (rule 5 — not a
+`.pvd`). This run already exists, moved to `aux/output_ANIM/`.
 
 ### Checking a case conforms
 
@@ -400,6 +439,69 @@ print(len(f),'snapshots, t =',t[0],'->',t[-1],'max gap',max(b-a for a,b in zip(t
 A max gap comparable to the mean spacing means the series is continuous. A gap of
 hundreds of time units means VTPs were confined to the analysis window — re-run
 with `--vtp_all=1`.
+
+---
+
+## 4c. SCREENSHOT PLAN — checked against the files on disk (2026-09-26)
+
+> Where this section differs from `REPORT_GUIDE.md` §4, **this section wins**. Two
+> changes: (1) F16 uses the production case `output_E_st0.7`, not
+> `aux/output_GEOM_stenosis0.7` (a 3-cycle geometry check that never reached a
+> periodic state); (2) the phase montage uses `output_A_Re100_al5` at dp = 0.05, not
+> `aux/output_ANIM` (dp = 0.10, and not one of the cases the reported numbers come
+> from). `ANIM` lives in `aux/`, not the top level.
+
+### What the study folders contain
+
+Every study folder holds **62 snapshots**: frame 0 = t = 0 (fluid at rest), then
+frames 1–61 = the analysis window only (the final 3 cycles). `frames.py` prints
+`NOT CONTINUOUS` for these; that matters only for animation, not for stills.
+
+Inflow is `u = U_f (1 + A sin 2πφ)`, φ = (t − t_ramp)/T. For every case at α = 5 or
+α = 10 (groups A, B, C, D, E, F) the last cycle maps to:
+
+| frame | phase | inflow |
+|---|---|---|
+| 41 | 0.00 T | mean, accelerating |
+| **46** | **0.25 T** | **peak systole, 1.5 U_f** |
+| 51 | 0.50 T | mean, decelerating |
+| 56 | 0.75 T | minimum, 0.5 U_f |
+
+α = 2 cases differ — check with `python3 analysis/frames.py output_<case> --quarters`.
+
+Arrays in `WaterBody_*.vtp`: `Velocity`, `Pressure`, `Density`, `Indicator`,
+`VelocityGradient`, `OriginalID`. `WallBoundary_*.vtp` has geometry only.
+U_f = 1, so `Velocity` is already u/U_f.
+
+### Geometry (for cameras)
+
+Inlet channel y ∈ [0, 3], x ∈ [0, 3.5]; junction x ∈ [3.5, 5]; upper branch
+y ∈ [3, 6], lower branch y ∈ [−3, 0], both of width 1.5. Wall particles span
+x ∈ [−1.18, 5.18], y ∈ [−3.18, 6.18]. Stenosis sits in the **upper branch**,
+y ∈ [3.15, 4.05], throat at **y = 3.6**; at 70 % the throat is 0.45 wide
+(9 particles at dp = 0.05).
+
+### The five screenshots
+
+Measured |u| (99th pct / max) was used to set the fixed colour ranges.
+
+| # | Figure | Folder | Frame | Colour by | Fixed range | Camera |
+|---|---|---|---|---|---|---|
+| 1 | **F16 stenosis jet** (full + throat zoom) | `output_E_st0.7` | 46 | Velocity Magnitude | 0 – 3.6 (max 3.63) | full; zoom focal (4.25, 4.5), parallel scale 1.9 |
+| 1b | F16 comparison panel (0 %) | `output_A_Re100_al5` | 46 | Velocity Magnitude | 0 – 3.6 | same as 1 |
+| 2 | **Phase montage** (4 panels) | `output_A_Re100_al5` | 41 / 46 / 51 / 56 | Velocity Magnitude | 0 – 2.4 (max 2.35) | full domain |
+| 3 | **F1 geometry** | `output_A_Re100_al5` | 0 | Solid Color | — | full domain; label in Inkscape/PPT |
+| 4 | **F2 particle close-up** | `output_A_Re100_al5` | 46 | Indicator | 0 – 1 | zoom junction, focal (4.25, 1.5), scale ~0.8 |
+| 5 | **Near-wall reversal** (companion to F12/F11) | `output_A_Re200_al10` | 56 | Velocity **Y** | −0.5 – +0.5, Cool to Warm | zoom upper branch, focal (4.25, 4.5), scale 1.9 |
+
+Standard render setup: Point Gaussian, radius 0.025, shader preset *Plain circle*;
+wall grey; white background; 2D interaction mode; View ▸ Preview at a fixed
+resolution so every image has the same framing; save PNG ≥ 2400 px wide. Save a
+ParaView state (`.pvsm`) after the first figure and reuse it.
+
+**Verification per screenshot:** after selecting a frame, the Information tab's
+Velocity range should match the max above (e.g. E_st0.7 frame 46 ≈ 3.63). If it
+does not, the wrong frame is loaded.
 
 ---
 

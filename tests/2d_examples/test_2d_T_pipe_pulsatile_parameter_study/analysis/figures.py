@@ -64,6 +64,15 @@ CMAP = plt.get_cmap("viridis")
 
 
 def _save(fig, out: Path, name: str):
+    # Report figures carry no in-plot titles: the caption states what the figure
+    # shows, and an editorial title can contradict the data. Drop the suptitle and,
+    # for single-panel figures, the axes title. Multi-panel figures keep their
+    # short panel labels (alpha = 2, (a), ...), which identify the panels.
+    if fig._suptitle is not None:
+        fig._suptitle.set_text("")
+    panels = [a for a in fig.axes if a.get_label() != "<colorbar>"]
+    if len(panels) == 1:
+        panels[0].set_title("")
     out.mkdir(parents=True, exist_ok=True)
     path = out / f"{name}.pdf"
     fig.savefig(path)
@@ -377,9 +386,8 @@ def fig_womersley_channel(cases, out: Path, res: Path, root: Path):
         ax.set_xlabel("$u / U_{ref}$")
         ax.axhline(0, color="0.8", lw=0.6)
     axes[0].set_ylabel("$y / R$")
-    fig.suptitle(
-        "Womersley benchmark: oscillatory channel flow\n"
-        "lines analytical, open circles SPH (colour = phase)", fontsize=8)
+    # no suptitle: it collided with the per-panel titles; the report caption
+    # carries "lines analytical, open circles SPH, colour = phase" instead
     _save(fig, out, "womersley_channel_profiles")
 
     # amplitude and phase across the channel, the quantitative version
@@ -473,7 +481,6 @@ def fig_conservation(cases, out: Path, res: Path):
         ax.scatter(br[order], meas[order], s=26, c="C3", zorder=3, label="SPH")
         ax.set_xlabel("lower-branch length ratio $b$")
         ax.set_ylabel(r"$Q_2 / (Q_2 + Q_3)$")
-        ax.set_title("Flow division follows the lumped resistance model", fontsize=9)
         ax.legend(fontsize=7)
         _save(fig, out, "flow_split_vs_branch_ratio")
 
@@ -556,7 +563,6 @@ def fig_parameter_maps(cases, out: Path, res: Path):
         ax.axhline(1.0, color="k", ls="--", lw=1)
         ax.set_xlabel(r"$\alpha$")
         ax.set_ylabel(r"PI$_{\rm branch}$ / PI$_{\rm inlet}$")
-        ax.set_title("Pulsatility is damped through the bifurcation", fontsize=9)
         _save(fig, out, "pulsatility_attenuation")
 
     # amplitude sweep: flow reversal
@@ -578,7 +584,6 @@ def fig_parameter_maps(cases, out: Path, res: Path):
         ax.axhline(0.0, color="k", ls="--", lw=1)
         ax.set_xlabel("phase $t/T$")
         ax.set_ylabel("inlet flow rate")
-        ax.set_title("Amplitude sweep: A > 1 drives flow reversal", fontsize=9)
         ax.legend(fontsize=7)
         _save(fig, out, "amplitude_sweep_flow_reversal")
 
@@ -664,9 +669,8 @@ def fig_extensions(cases, out: Path, res: Path):
     fig, ax = plt.subplots()
     ax.plot([r["stenosis"] * 100 for r in rows],
             [r["peak_tawss_nd"] for r in rows], "o-", ms=5)
-    ax.set_xlabel("area reduction  [%]")
+    ax.set_xlabel("stenosis severity: width reduction at the throat  [%]")
     ax.set_ylabel(r"peak TAWSS / $(\mu U_f/R)$")
-    ax.set_title("Stenosis severity drives peak wall shear", fontsize=9)
     _save(fig, out, "stenosis_peak_wss")
 
 

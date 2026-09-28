@@ -59,7 +59,115 @@ All under `build/tests/2d_examples/test_2d_T_pipe_pulsatile_parameter_study/bin/
 | R4 | **Write the report** | ~20 pages | REPORT_GUIDE §1–§3; section plan in §8 below |
 | R5 | *Optional:* T4 (`SectionMeanPressure`), T5 (WSS convergence) | — | §6; not needed to write the report |
 
-**R1 order:** stenosis (F16) → phase montage → geometry (F1) → particle close-up (F2)
+**Progress (2026-09-27):** R1 done with a simplified plan: 2 screenshots only, both
+frame 46 at 0–3.6 (A = `output_A_Re100_al5`, B = `output_E_st0.7`). Report §4
+(Verification) drafted in chat. For §4 use the new
+`figures/verification/convergence_clean.pdf` (made by `analysis/convergence_clean.py`;
+the old `convergence_functionals.pdf` draws misleading vertical lines for the NaN
+wall-shear series) and `periodicity_epsilon_decay.pdf`. `periodicity_cycles_vs_alpha.pdf`
+only plots the prescribed run length, not a measurement. Note that ε_Q plateaus at a
+~1 % noise floor after 1–2 cycles; it does not decay as 0.4α².
+
+Report §5 (Validation) drafted in chat. `womersley_channel_profiles` regenerated with
+its overlapping suptitle removed (patched in both copies of `analysis/figures.py`).
+**§3.1 is stale:** the full run gives T-pipe inlet peakedness **1.435** at Re 100,
+α 5 (not 1.41; `results/tpipe_profile_relaxation.csv`). Across group A, peakedness
+falls from the parabolic 1.5 toward Womersley as U/ω = 0.75·Re/α² shrinks, which
+supports the entrance-length argument.
+
+Report §6 (Results) drafted in chat. New figures from `analysis/results_clean.py`:
+`figures/results/factorial_normalised` and `figures/results/wall_maps`. **Corrections
+to §3.3 / REPORT_GUIDE:**
+- "TAWSS falls with Re" is a units artefact (mu = rho U D/Re). Normalised by mu U/R,
+  peak TAWSS **rises** with Re (8.3 → 10.4 → 13.6) and the wall mean collapses to ~3.95
+  for α ≤ 5.
+- OSI has two distinct mechanisms. (1) α = 10: Womersley wall-shear reversal along
+  the straight walls; the Womersley ratio A·τ_osc/τ_steady = 0.53 / 0.96 / 1.79 at
+  α = 2/5/10 (A = 0.5), independent of Re. (2) Re = 200: localised on the branch
+  inner walls 0.4–0.55 past the sharp corner, i.e. a moving separation/reattachment
+  point. The divider never has OSI > 0.01.
+- `wall_osi_distribution` shows the baseline (OSI ≡ 0), so it is useless.
+  `pulsatility_attenuation` is titled "damped" but all its ratios are ≥ 1, so do not use it.
+
+Report §7 (Extensions) drafted in chat. New figure `figures/extensions/extensions_summary`
+(from `analysis/extensions_clean.py`) replaces `flow_split_vs_branch_ratio`, whose
+title ("follows the lumped resistance model") contradicted its own data. **Corrections
+to §3.3b:** R0 is an equal, length-independent loss added to EACH branch path, not a
+resistance "common to both paths" (a shared series resistance cannot change the
+split). R0/R is one parameter fitted to two points, so "re-predicts both to 0.2 %" is
+not a test; the test is that the two estimates (5.80, 4.99) agree to 15 %. Stenosis
+wall probes follow the constricted contour (valid). The throat TAWSS* (13.6/18.4/18.1)
+is non-monotone, so report it only qualitatively. Post-stenotic OSI peaks 0.31/0.44/0.49
+at 0.4/0.9/1.4 downstream of the throat.
+
+Report §8 (Discussion) and §2 (Theory) drafted in chat. §2 introduces the closed form
+f(α) = |x tanh x| / (3 |1 − tanh(x)/x|), x = α√i, which gives the reversal criterion
+A·f(α) > 1 and A_crit = 1/f = 1.00 / 0.94 / 0.52 / 0.28 at α = 0.5/2/5/10 (checked
+against `womersley.py`). The analytical flow lag at α = 10 is **85.6°** (the
+`womersley.py` docstring and REPORT_GUIDE T1 say 85.7°).
+Report §3 (Method and setup) drafted in chat. It uses Screenshot A as Fig 3.1 and the
+run matrix as Table 2. Scheme facts were checked in the code: Wendland C2, h = 1.3 dp
+(SPHinXsys default), AcousticRiemannSolver in both halves, density summation, transport
+velocity correction, c_f = 10·1.25·1.5·U(1+A), ramp 2T, stations x = 1.75 /
+y = 4.5 / y = −1.5b, 40 probes × 5 walls at 1 dp and 2 dp.
+Report §1 (Introduction) drafted. **All eight report sections are now drafted (in
+chat, 2026-09-27).** Final figure set: Fig 3.1 = Screenshot A; 4.1
+`verification/convergence_clean`; 4.2 `verification/periodicity_epsilon_decay`;
+5.1 `validation/womersley_channel_profiles`; 5.2 `validation/mass_conservation_waveforms`;
+6.1 `results/factorial_normalised`; 6.2 `results/wall_maps`;
+6.3 `results/amplitude_sweep_flow_reversal`; 7.1 `extensions/extensions_summary`;
+7.2 = Screenshot B. Tables 1–8 are defined in the §1–§7 drafts.
+Remaining for the user: assemble the report, optionally write an abstract, and proofread.
+
+**Review round (2026-09-28), all confirmed and fixed:**
+- In-plot titles are now stripped in `figures._save` (suptitle, plus the axes title of
+  single-panel figures); both copies patched and all figures regenerated. The
+  editorial titles ("A > 1 drives flow reversal", "severity drives peak wall shear",
+  "follows the lumped resistance model", "damped") are gone. The stenosis x-label is
+  now "width reduction".
+- Stenosis peak TAWSS* = the maximum over BOTH throat walls: 18.1 / 22.1 / 18.1
+  (inner 13.6 / 18.4 / 18.1, outer 18.1 / 22.1 / 17.5). At the same y-range without a
+  stenosis: inner 2.5, outer 10.3. Keep `stenosis_peak_wss` out of the report.
+- The maximum OSI is ALWAYS on a branch inner wall 0.4–0.9 past the corner
+  (separation zone), including α = 10 and A = 1. The fully developed straight-wall OSI
+  estimate for τ = τs(1 + r sin ωt) is 0.064 (A = 0.75), 0.140 (A = 1) and 0.122
+  (α = 10, A = 0.5). Measured on the inlet walls: 0.04, 0.12–0.13, and 0.12–0.14
+  (Re 200) but 0.22–0.30 (Re 100/50). The excess at lower Re is unexplained.
+- SPH wording checked against the source: observers are Shepard-normalised
+  interpolants over FLUID particles only (contact list = WaterBody), so both probe
+  offsets (1 dp, 2 dp < 2h = 2.6 dp) have one-sided support. The wall layers give full
+  support to the fluid equations only. The TVF is a position-based correction
+  (bulk particles, Zhang/Rezavand/Hu 2020), not Adami's momentum TVF. Density uses
+  the NearFreeStream blend. AcousticRiemannSolver uses the TruncatedLinear limiter
+  (coefficient 3). No-slip comes via the zero wall velocity in the viscous force.
+
+**Restructure round (2026-09-28):** the report was retitled around the stenosis. New
+§3.2 "Modifications to the example" and Appendix A (code excerpts). §4 trimmed; the GCI
+table and the per-case periodicity/WCSPH table moved to Appendix B. Added the jet check
+(E_st0.7, frame 46): Q_upper at 0.25T = 1.253, which by continuity gives 2.8U mean in
+the 0.45 throat. Measured max |u| is 3.27U at the throat (y = 3.6), rising to 3.63U at
+(4.23, 3.80), i.e. 0.2 downstream (vena contracta); an upper bound on contraction gives
+Cc ≥ 0.77. NB: the original T_shaped_pipe already used Riemann in the 1st half; only
+the 2nd half (continuity) was switched from NoRiemann. Physiology: in vivo
+α²/Re = ωR/2U ≈ 0.03–0.2; the α = 2 row is coronary-like, and the α = 10 row
+(ratio 0.5–2) is not physiological.
+
+**Full-report check (2026-09-28, BFM_report_updated_1-1.pdf).** The data contradict four claims:
+- Divider OSI < 0.01 holds only for the symmetric, unobstructed cases. At the divider face
+  (y in 0–3) OSI is 0.061 (b = 0.5), 0.129 (b = 0.7) and 0.221 (70 % stenosis), each
+  exactly at the stagnation point (the TAWSS minimum), i.e. the stagnation point moves
+  with the split. C_dp0.075 gives 0.24 at y = 0.99 (off-stagnation, a resolution artefact).
+- Branch PI vs inlet PI over the nine Re–α cases: +0.3–3.3 % (α ≤ 5), +3.3–6.5 %
+  (α = 10, Re ≥ 100), and +24 % at Re 50/α 10, whose inlet PI is 1.207 vs 1.0 imposed.
+- Per-wall mean TAWSS* (α ≤ 5): inlet 3.1–3.4, far wall 5.9–9.1, branch inner walls
+  1.9–3.9. The average is raised by the far wall, NOT by the "branch Poiseuille 6".
+- B-case wall-mean TAWSS* = 3.95 / 3.96 / 3.93 / 3.93 / 4.26 for A = 0 … 1.
+Also: the Re 50/α 10 outlier matches acoustic non-compactness, ωL/c ≈ 0.85 (L ≈ 9)
+vs 0.43 / 0.21 for the other α = 10 cases and ≤ 0.21 elsewhere. The dp = 0.075 vs 0.10
+peak-TAWSS jump is +66 % (not 65 %). Inlet-wall OSI rising from the inflow holds
+at Re ≥ 100 only (Re 50 has 0.18 at x = 0.2).
+
+**R1 order (original plan):** stenosis (F16) → phase montage → geometry (F1) → particle close-up (F2)
 → near-wall reversal. Stenosis first because it is the figure most dependent on
 getting the frame and colour range right.
 
